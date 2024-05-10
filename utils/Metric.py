@@ -4,6 +4,15 @@ from sklearn.metrics import precision_recall_curve
 
 ######## metric ###########
 def metric(premask, groundtruth):
+    '''
+
+    Args:
+        premask:
+        groundtruth:
+
+    Returns:
+
+    '''
     groundtruth = groundtruth.flatten()
     premask = premask.flatten() 
     groundtruth = groundtruth.cpu().numpy()

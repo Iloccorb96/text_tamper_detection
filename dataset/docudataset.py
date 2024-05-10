@@ -47,14 +47,19 @@ class UNetDataset(Dataset):
         else:
             self.train_transform = A.Compose(
                                 [
-                                    A.Resize(max_size_h,max_size_w,p=1),
-                                    #A.RandomCrop(width=max_size, height=max_size,p=1),
-                                    A.VerticalFlip(p=0.2),
-                                    #A.RandomRotate90(p=0.5),
-                                    A.HorizontalFlip(p = 0.2),
-                                    #A.ImageCompression(quality_lower=50, quality_upper=100, p=0.5),
-                                    #A.ISONoise(color_shift=(0.01, 0.05), intensity=(0.1, 0.5), always_apply=False, p=0.5),
-                                    #A.Normalize(mean=(0.485, 0.456, 0.406),std=(0.229, 0.224, 0.225), p=1),
+                                    # A.Resize(max_size_h,max_size_w,p=1),
+                                    # A.RandomCrop(width=max_size, height=max_size,p=1),
+                                    A.VerticalFlip(p=0.5),  # 翻转
+                                    A.OneOf([
+                                        A.HorizontalFlip(p=0.5),#翻转
+                                        A.RandomBrightnessContrast(p=0.5),#亮度和对比度
+                                        A.HueSaturationValue(p=0.5),#色调饱和度亮度
+                                        A.ISONoise(color_shift=(0.01, 0.05), intensity=(0.1, 0.5), always_apply=False,
+                                                   p=0.5)#噪声
+
+                                    ]),
+                                    A.ImageCompression(quality_lower=75, quality_upper=100, p=0.5),  # 压缩
+                                    A.Normalize(mean=(0.485, 0.456, 0.406),std=(0.229, 0.224, 0.225), p=1),
                                     ToTensorV2(),
                                 ]
                             )
@@ -63,8 +68,8 @@ class UNetDataset(Dataset):
         else:
             self.val_transform = A.Compose(
                                         [
-                                            A.Resize(max_size_h,max_size_w,p=1),
-                                            #A.Normalize(mean=(0.485, 0.456, 0.406),std=(0.229, 0.224, 0.225), p=1),
+                                            # A.Resize(max_size_h,max_size_w,p=1),
+                                            A.Normalize(mean=(0.485, 0.456, 0.406),std=(0.229, 0.224, 0.225), p=1),
                                             ToTensorV2(),
                                         ]
                                     )

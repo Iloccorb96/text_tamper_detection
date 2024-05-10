@@ -1,26 +1,21 @@
 import os
 os.environ['CUDA_LAUNCH_BLOCKING']= '1'
 import torch.nn as nn
-import torch
 from tqdm import tqdm
-import numpy as np
-from view.MetricMonitor import MetricMonitor
-from metric.Metric import *
+from text_tamper_detection.utils.MetricMonitor import MetricMonitor
+from text_tamper_detection.utils.Metric import *
 from torch.utils.data import DataLoader
 import random
 from dataset.docudataset import *
 from lossModel.MultLoss import WeightedDiceBCE
 import time
 from torchvision.utils import save_image
-import yaml
 from sklearn.metrics import roc_auc_score
 torch.backends.cudnn.enabled = False
 import shutil
 from models.rrumodel import Ringed_Res_Unet
 from models.mvsssnet import get_mvss
 from models.Tifdm import Tifdm
-from models.CFLNet import CFLNet
-import timm
 from models import denseFCN
 from models.Movenet7f4attention_adaption import Movenet
 import torch.nn.functional as F
@@ -45,15 +40,6 @@ def create_model(params):
                                 constrain=True,
                                 n_input=3,
                                 )
-
-    if params=='CFLNet':
-        with open('utils/config.yaml', 'r') as file:
-            cfg_cfl = yaml.load(file, Loader=yaml.FullLoader)
-        with torch.no_grad():
-            test_model = timm.create_model(cfg_cfl['model_params']['encoder'], pretrained= False, features_only=True, out_indices=[4])
-            in_planes = test_model(torch.randn((2,3,512,512)))[0].shape[1]
-            del test_model
-        model = CFLNet(cfg_cfl, in_planes)
 
     model= model.cuda()
     #model = nn.DataParallel(model).cuda()

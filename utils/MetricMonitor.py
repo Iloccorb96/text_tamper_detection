@@ -1,5 +1,6 @@
 from collections import defaultdict
 
+
 #########  train Loss Monitor ###############
 class MetricMonitor:
     def __init__(self, float_precision=3):
