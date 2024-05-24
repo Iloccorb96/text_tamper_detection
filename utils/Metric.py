@@ -20,7 +20,7 @@ def metric(premask, groundtruth):
 
     seg_inv, gt_inv = np.logical_not(premask), np.logical_not(groundtruth)
     true_pos = float(np.logical_and(premask, groundtruth).sum())  # float for division
-    true_neg = np.logical_and(seg_inv, gt_inv).sum()
+    # true_neg = np.logical_and(seg_inv, gt_inv).sum()
     false_pos = np.logical_and(premask, gt_inv).sum()
     false_neg = np.logical_and(seg_inv, groundtruth).sum()
     f1 = 2 * true_pos / (2 * true_pos + false_pos + false_neg + 1e-6)
@@ -38,10 +38,10 @@ def metric_numpy(premask, groundtruth):
     premask = premask.flatten()
     seg_inv, gt_inv = np.logical_not(premask), np.logical_not(groundtruth)
     true_pos = float(np.logical_and(premask, groundtruth).sum())  # float for division
-    true_neg = np.logical_and(seg_inv, gt_inv).sum()
+    # true_neg = np.logical_and(seg_inv, gt_inv).sum()
     false_pos = np.logical_and(premask, gt_inv).sum()
     false_neg = np.logical_and(seg_inv, groundtruth).sum()
-    #fnr = false_neg/(true_pos+false_neg + 1e-6)
+    fnr = false_neg/(true_pos+false_neg + 1e-6)
     f1 = 2 * true_pos / (2 * true_pos + false_pos + false_neg + 1e-6)
     cross = np.logical_and(premask, groundtruth)
     union = np.logical_or(premask, groundtruth)
@@ -49,7 +49,7 @@ def metric_numpy(premask, groundtruth):
     if np.sum(cross) + np.sum(union) == 0:
         #print('cross+union=0!!!!')
         iou = 1
-    return f1, iou
+    return f1, iou, fnr
 
 
 
@@ -69,7 +69,7 @@ def metric_numpy_test(premask, groundtruth):
     true_neg = np.logical_and(seg_inv, gt_inv).sum()
     false_pos = np.logical_and(premask, gt_inv).sum()
     false_neg = np.logical_and(seg_inv, groundtruth).sum()
-    fnr = false_neg/(true_pos+false_neg + 1e-6)
+    # fnr = false_neg/(true_pos+false_neg + 1e-6)
     f1 = 2 * true_pos / (2 * true_pos + false_pos + false_neg + 1e-6)
     cross = np.logical_and(premask, groundtruth)
     union = np.logical_or(premask, groundtruth)
@@ -77,7 +77,7 @@ def metric_numpy_test(premask, groundtruth):
     if np.sum(cross) + np.sum(union) == 0:
         #print('cross+union=0!!!!')
         iou = 1
-    return f1, iou,fnr
+    return f1, iou
 
 
 # auc

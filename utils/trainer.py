@@ -88,44 +88,39 @@ def save_model(model, optimizer, save_dir, params, epoch=0, best_acc=0,cur_acc=0
                                                                       best_acc))
 
 
-def cal_score(pred_mask, label_mask):
+def cal_f1_iou_auc(batch_pred_mask, batch_gt_mask):
     """
     :param pred_mask:
     :param label_mask:
     :return:
     """
-    #原本是循环对所有样本，一个一个计算f1和iou
-    #现在传入batch结果，zip后
-    img_1 = img_1 / 255.
-    img_2 = img_2 / 255.
-    img_1[img_1 >= 0.5] = 1
-    img_1[img_1 < 0.5] = 0
+    """
+        计算模型预测结果的评分（F1、IoU、AUC）
+        :param batch_pred_mask: 批量预测的掩码图像，形状为 [batch_size, H, W]，值范围为 [0, 1]
+        :param batch_gt_mask: 批量真实标签的掩码图像，形状为 [batch_size, H, W]，值范围为 [0, 1]
+        :return: 总评分（score）、F1平均值（f1_avg）、IoU平均值（iou_avg）、AUC平均值（auc_avg）
+        """
+    f1_list, iou_list, auc_list = [], [], []
+    # 循环处理每个样本
+    for pred_mask, gt_mask in zip(batch_pred_mask, batch_gt_mask):
+        # 将预测结果和真实标签转换为二进制图像
+        pred_mask[pred_mask >= 0.5] = 1
+        pred_mask[pred_mask < 0.5] = 0
+        gt_mask[gt_mask >= 0.5] = 1
+        gt_mask[gt_mask < 0.5] = 0
 
-    img_2_temp = img_2
-    img_2_temp[img_2_temp >= 0.5] = 1
-    img_2_temp[img_2_temp < 0.5] = 0
-    # 计算f1 score 和 iou score
-    f1, iou = metric_numpy(img_1, img_2_temp)
+        # 计算 F1 分数和 IoU
+        f1, iou = metric_numpy(pred_mask, gt_mask)
 
-    # 计算auc
-    img_1_ = img_1.flatten()
-    img_2_ = img_2.flatten()
-    try:
-        # 计算auc score
-        auc = roc_auc_score(img_2_, img_1_)
-        auc_list.append(auc)
-    except ValueError:
-        pass
-
-    f1_list.append(f1)
-    iou_list.append(iou)
-
-    f1_avg = np.mean(f1_list)
-    iou_avg = np.mean(iou_list)
-    auc_avg = np.mean(auc_list)
-    # auc_avg = 0
-    score = f1_avg + iou_avg
-    return score, f1_avg, iou_avg, auc_avg
+        # 计算 AUC
+        try:
+            auc = roc_auc_score(gt_mask.flatten(), pred_mask.flatten())
+            auc_list.append(auc)
+        except ValueError:
+            pass
+        f1_list.append(f1)
+        iou_list.append(iou)
+    return f1_list, iou_list, auc_list
 
 
 def train(train_loader, model, criterion1, optimizer, epoch, params, global_step):
@@ -156,26 +151,13 @@ def train(train_loader, model, criterion1, optimizer, epoch, params, global_step
                                                                                              time.localtime()))
         )
 
-def val(val_loader, model, criterion1, epoch, params, global_step):
-    metric_monitor = MetricMonitor()
-    model.eval()
-    stream = tqdm(val_loader, desc='processing', colour='CYAN')
-    with torch.no_grad():
-        for step, (batch_x_val, batch_y_val, w_s, h_s, name) in enumerate(stream, start=1):
-            masks = batch_y_val
-            batch_x_val = batch_x_val.cuda(non_blocking=params['non_blocking_'])
-
 def predict(val_loader, model, params, threshold):
     model.eval()
     stream = tqdm(val_loader, desc='processing', colour='CYAN')
     with torch.no_grad():
-        avg_dice_list = []
-        avg_iou_list = []
+        f1_list, iou_list, auc_list = [], [], []
         for step, (batch_x_val, batch_y_val, w_s, h_s, name) in enumerate(stream, start=1):
-            masks = batch_y_val
             batch_x_val = batch_x_val.cuda(non_blocking=params['non_blocking_'])
-            masks = masks.cuda(non_blocking=params['non_blocking_'])
-
             output_val = model(batch_x_val)
 
             batch_x_val_h_flip = batch_x_val.clone().detach()
@@ -193,34 +175,32 @@ def predict(val_loader, model, params, threshold):
 
             result_output = result_output_1
             result_output = torch.sigmoid(result_output)
-            for i in range(len(result_output)):
-                orig_w = w_s[i]
-                orig_h = h_s[i]
-                result_output_ = F.interpolate(result_output[i:i + 1], size=[orig_h, orig_w], mode="bicubic",
-                                               align_corners=False)
-                result_output[result_output >= threshold] = 1
-                result_output[result_output < threshold] = 0
-                str_ = name[i].split('/')[-1]
-                name_str = str_.replace('.jpg', '.png')
-                save_img_name = os.path.join(save_dir, name_str)
-                save_image(result_output_, save_img_name)
-
+            f1_list_tmp, iou_list_tmp, auc_list_tmp = cal_f1_iou_auc(result_output, batch_y_val)
+            f1_list += f1_list_tmp
+            iou_list += iou_list_tmp
+            auc_list += auc_list_tmp
+        f1_avg, iou_avg, auc_avg = np.mean(f1_list), np.mean(iou_list), np.mean(auc_list) if auc_list else 0
+        score = f1_avg + iou_avg
+        return score, f1_avg, iou_avg, auc_avg
 
 def predict_simple(val_loader, model, params, threshold):
     model.eval()
     stream = tqdm(val_loader, desc='processing', colour='CYAN')
-    with torch.no_grad():
-        avg_dice_list = []
-        avg_iou_list = []
+    with (torch.no_grad()):
+        f1_list, iou_list, auc_list = [],[],[]
         for step, (batch_x_val, batch_y_val, w_s, h_s, name) in enumerate(stream, start=1):
-            masks = batch_y_val
             batch_x_val = batch_x_val.cuda(non_blocking=params['non_blocking_'])
             batch_pred = model(batch_x_val)
             batch_pred = torch.sigmoid(batch_pred)
+            f1_list_tmp, iou_list_tmp, auc_list_tmp = cal_f1_iou_auc(batch_pred, batch_y_val)
+            f1_list += f1_list_tmp
+            iou_list += iou_list_tmp
+            auc_list += auc_list_tmp
+        f1_avg,iou_avg,auc_avg = np.mean(f1_list),np.mean(iou_list),  np.mean(auc_list) if auc_list else 0
+        score = f1_avg + iou_avg
+    return score,f1_avg, iou_avg, auc_avg
 
-
-
-def train_and_validate(model, optimizer, train_dataset, val_dataset, valid_label_dir,params, epoch_start=1, best_acc=0):
+def train_and_validate(model, optimizer, train_dataset, val_dataset, valid_label_dir,params, epoch_start=1, best_score=0):
     save_dir = os.path.join(params['save_dir'])
     train_loader = DataLoader(
         train_dataset,
@@ -242,33 +222,30 @@ def train_and_validate(model, optimizer, train_dataset, val_dataset, valid_label
     criterion_1 = WeightedDiceBCE(dice_weight=0.3, BCE_weight=0.7).cuda()
     # criterion_2 = nn.BCELoss().cuda()
 
-    log_path = '/data/jinrong/wcw/PS/text-image-forgery-detection/ckps/logs'
+    # log_path = '/data/jinrong/wcw/PS/text-image-forgery-detection/ckps/logs'
     global_step = 0
 
     if params["mode"] == 'train':
         for epoch in range(epoch_start, params["epochs"] + 1):
             train(train_loader, model, criterion_1, optimizer, epoch, params, global_step)
-            f1 = 0
-            iou = 0
-            predict_simple(val_loader, model, params, threshold=0.35)
-            cur_acc, f1, iou, auc = cal_score(valid_label_dir, save_dir)
+            cur_score,f1_avg, iou_avg, auc_avg = predict_simple(val_loader, model, params, threshold=0.35)
+
             print('current model is:{} ,current epoch is:{} ,current score is:{} ,best score is:{}'.format(
-                params["model_name"], epoch, cur_acc, best_acc))
+                params["model_name"], epoch, cur_score, best_score))
             if epoch//5 == 0:
-                save_model(model, optimizer, params["save_dir"], params["save_model_path"], epoch, best_acc,
-                           cur_acc, params["model_name"], f1, iou, auc,mode='per5')
-            if cur_acc > best_acc:
-                best_acc = cur_acc
-                save_model(model, optimizer, params["save_dir"], params["save_model_path"], epoch, best_acc,
-                           cur_acc,params["model_name"], f1, iou, auc)
-            val(val_loader, model, criterion_1, epoch, params, global_step)
+                save_model(model, optimizer, params["save_dir"], params["save_model_path"], epoch, best_score,
+                           cur_score, params["model_name"], f1_avg, iou_avg, auc_avg,mode='per5')
+            if cur_score > best_score:
+                best_score = cur_score
+                save_model(model, optimizer, params["save_dir"], params["save_model_path"], epoch, best_score,
+                           cur_score,params["model_name"], f1_avg, iou_avg, auc_avg)
+
 
 
     elif params["mode"] == 'val':
         predict(val_loader, model, params, threshold=0.35)
-        cur_acc, f1, iou, auc = cal_score(valid_label_dir, save_dir)
-        print('current score is:{:3f} f1 score is:{:3f} iou score is:{:3f} auc score is:{:3f}'.format(cur_acc, f1, iou,
-                                                                                                      auc))
+        cur_score,f1_avg, iou_avg, auc_avg = predict_simple(val_loader, model, params, threshold=0.35)
+        print('current score is:{:3f} f1 score is:{:3f} iou score is:{:3f} auc score is:{:3f}'.format(cur_score, f1_avg, iou_avg, auc_avg))
 
     elif params["mode"] == 'predict':
         # threshold=[0.1,0.15,0.2,0.25,0.3,0.35,0.4,0.45,0.5,0.55,0.6,0.65,0.75]
@@ -276,7 +253,7 @@ def train_and_validate(model, optimizer, train_dataset, val_dataset, valid_label
         log_path = "./logs/{}_{}.txt".format(params["model_name"], params["dataset_name"])
         for thre in threshold:
             predict(val_loader, model, params, threshold=thre)
-            cur_acc, f1, iou, auc = cal_score(valid_label_dir, save_dir)
+            f1, iou, auc = cal_f1_iou_auc(valid_label_dir, save_dir)
             cur_acc = str(round(cur_acc, 3))
             f1 = str(round(f1, 3))
             iou = str(round(iou, 3))
