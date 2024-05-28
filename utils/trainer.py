@@ -175,6 +175,7 @@ def predict(val_loader, model, params, threshold):
 
             result_output = result_output_1
             result_output = torch.sigmoid(result_output)
+            result_output = result_output.cpu().numpy()
             f1_list_tmp, iou_list_tmp, auc_list_tmp = cal_f1_iou_auc(result_output, batch_y_val)
             f1_list += f1_list_tmp
             iou_list += iou_list_tmp
@@ -192,6 +193,7 @@ def predict_simple(val_loader, model, params, threshold):
             batch_x_val = batch_x_val.cuda(non_blocking=params['non_blocking_'])
             batch_pred = model(batch_x_val)
             batch_pred = torch.sigmoid(batch_pred)
+            batch_pred = batch_pred.cpu().numpy()
             f1_list_tmp, iou_list_tmp, auc_list_tmp = cal_f1_iou_auc(batch_pred, batch_y_val)
             f1_list += f1_list_tmp
             iou_list += iou_list_tmp
